@@ -4,104 +4,30 @@ use Illuminate\Foundation\Testing\WithoutMiddleware;
 
 class IvrControllerTest extends TestCase
 {
-    public function testWelcomeResponse()
+    use WithoutMiddleware;
+
+    public function test_welcome_contains_age_options()
     {
-        // When
-        $response = $this->call('POST', route('welcome'));
-        $welcomeString = $response->getContent();
-        $welcomeResponse = new SimpleXMLElement($welcomeString);
-
-        // Then
-        $this->assertEquals(1, $welcomeResponse->children()->count());
-
-        $gatherCommand = $welcomeResponse->Gather;
-        $this->assertNotNull($gatherCommand);
-        $this->assertEquals(1, $gatherCommand->children()->count());
-
-        $this->assertEquals('1', $gatherCommand->attributes()['numDigits']);
-        $this->assertEquals(
-            route('menu-response', [], false), $gatherCommand->attributes()['action']
-        );
-
-        $this->assertNotNull($welcomeResponse->Gather->Play);
+        $response = $this->post(route('welcome'));
+        $response->assertSee('Vuole proseguire col percorso digitale');
     }
 
-    public function testMainMenuOptionOne()
+    public function test_age_option_one_leads_to_main_menu()
     {
-        // When
-        $response = $this->call('POST', route('menu-response'), ['Digits' => 1]);
-        $menuString = $response->getContent();
-        $menuResponse = new SimpleXMLElement($menuString);
-
-        // Then
-        $this->assertEquals(3, $menuResponse->children()->count());
-        $this->assertNotNull($menuResponse->Say);
-        $this->assertEquals(2, $menuResponse->Say->count());
-        $this->assertNotNull($menuResponse->Hangup);
+        $response = $this->post(route('age-response'), ['Digits' => '1']);
+        $response->assertSee('Ottima scelta');
     }
 
-    public function testMainMenuOptionTwo()
+    public function test_main_menu_is_accessible()
     {
-        // When
-        $response = $this->call('POST', route('menu-response'), ['Digits' => 2]);
-        $menuString = $response->getContent();
-        $menuResponse = new SimpleXMLElement($menuString);
-
-        // Then
-        $this->assertNotNull($menuResponse->Gather);
-        $this->assertNotNull($menuResponse->Gather->Say);
-
-        $this->assertEquals(1, $menuResponse->Gather->children()->count());
-        $this->assertEquals(1, $menuResponse->children()->count());
-
-        $this->assertEquals('1', $menuResponse->Gather->attributes()['numDigits']);
-        $this->assertEquals(
-            route('planet-connection', [], false),
-            $menuResponse->Gather->attributes()['action']
-        );
+        $response = $this->post(route('main-menu'));
+        $response->assertSee('Menu principale');
     }
 
-    public function testNonexistentOption()
+    public function test_star_returns_to_main_menu()
     {
-        // When
-        $response = $this->call('POST', route('menu-response'), ['Digits' => 99]);
-        $errorResponse = new SimpleXMLElement($response->getContent());
-
-        // Then
-        $this->assertEquals('Returning to the main menu', $errorResponse->Say);
-        $this->assertEquals(route('welcome', [], false), $errorResponse->Redirect);
-    }
-
-    public function testCallPlanet()
-    {
-        // When
-        $response = $this->call('POST', route('planet-connection'), ['Digits' => 2]);
-        $menuResponse = new SimpleXMLElement($response->getContent());
-
-        // Then
-        $this->assertEquals(2, $menuResponse->Say->count());
-        $this->assertEquals(1, $menuResponse->Dial->count());
-    }
-
-    public function testCallUnknownPlanet()
-    {
-        // When
-        $response = $this->call('POST', route('planet-connection'), ['Digits' => 99]);
-        $menuResponse = new SimpleXMLElement($response->getContent());
-
-        // Then
-        $this->assertEquals(1, $menuResponse->Say->count());
-        $this->assertEquals(0, $menuResponse->Dial->count());
-
-        $this->assertEquals(1, $menuResponse->Redirect->count());
-        $this->assertEquals(route('welcome', [], false), $menuResponse->Redirect);
-        $this->assertEquals('Returning to the main menu', $menuResponse->Say);
-    }
-
-    public function testStarReturnToMenu()
-    {
-        $this->call('POST', route('menu-response'), ['Digits' => '*'])->assertRedirect('/ivr/welcome');
-
-        $this->call('POST', route('planet-connection'), ['Digits' => '*'])->assertRedirect('/ivr/welcome');
+        $response = $this->post(route('main-response'), ['Digits' => '*']);
+        $response->assertSee('Torna al menu principale');
+        $response->assertSee('/ivr/main-menu');
     }
 }
