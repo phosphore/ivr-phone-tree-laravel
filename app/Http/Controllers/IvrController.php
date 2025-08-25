@@ -20,7 +20,7 @@ class IvrController extends Controller
 
         $response->pause(['length' => 10]);
 
-        $gather->say(
+        $response->say(
             "Benvenuta PAOLA POLATO. " .
             "Abbiamo rilevato che il chiamante potrebbe avere più di sessanta anni in base alla banca dati corrente. " .
             "Vuole proseguire col percorso digitale? Prema 1. " .
