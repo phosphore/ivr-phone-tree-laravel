@@ -103,7 +103,7 @@ class IvrController extends Controller
             'input' => 'dtmf',
             'action' => route('main-response'),
             'method' => 'POST',
-            'timeout' => 20,
+            'timeout' => 15,
             'finishOnKey' => '#',
         ]);
 
