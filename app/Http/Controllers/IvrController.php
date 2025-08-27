@@ -18,7 +18,7 @@ class IvrController extends Controller
             ['voice' => 'Polly.Carla', 'language' => 'it-IT']
         );
 
-        $response->pause(['length' => 12]);
+        $response->pause(['length' => 10]);
 
         $response->say(
             "Benvenuta PAOLA POLATO. " .
@@ -30,7 +30,23 @@ class IvrController extends Controller
             ['voice' => 'Polly.Carla', 'language' => 'it-IT']
         );
 
-        return $response;
+           // GATHER PER LA SCELTA 1-4
+        $gather = $response->gather([
+            'input' => 'dtmf',
+            'numDigits' => 1,
+            'action' => route('age-response'), // URL assoluta
+            'method' => 'POST',
+            'timeout' => 10,
+        ]);
+
+
+        $response->pause(['length' => 10]);
+
+
+        // se non arriva input, ripeti
+        $response->redirect(route('welcome'));
+
+        return response((string) $response, 200)->header('Content-Type', 'text/xml');
     }
 
     public function ageResponse(Request $request)
@@ -44,56 +60,73 @@ class IvrController extends Controller
                     "Si ricorda che la scelta é a proprio rischio. Se per caso è davvero rincoglionita dalla vecchiaia e ha selezionato l'opzione errata, può semplicemente riagganciare e ricominciare il percorso.",
                     ['voice' => 'Polly.Carla', 'language' => 'it-IT']
                 );
-                $response->redirect(route('main-menu', [], false));
+                $response->redirect(route('main-menu'));
                 break;
             case '2':
                 $response->say(
-                    "Per trovare l'ufficio più vicino digiti il Suo CAP a cinque cifre. Se non lo ricorda prema 0 per ascoltare tutti i CAP del Veneto in ordine alfabetico. La prima disponibilità utile risulta: 8 febbraio duemila ventisette. Tempo stimato di attesa quarantasette minuti.",
+                    "Per trovare l'ufficio più vicino sarà necessario il CAP del suo comune a cinque cifre. Se non lo ricorda prema 0 per ascoltare tutti i CAP del Veneto in ordine alfabetico. La prima disponibilità utile risulta: 8 febbraio duemila ventisei. Si prega di parlare con un operatore umano nel prossimo menù.",
                     ['voice' => 'Polly.Carla', 'language' => 'it-IT']
                 );
-                $response->redirect(route('main-menu', [], false));
+                $response->redirect(route('main-menu'));
                 break;
             case '3':
                 $response->say(
                     "Servizi digitali per over sessanta. Numero uno: stampa del modulo digitale in formato cartaceo davanti a uno sportello. Numero due: appuntamento online per prenotare l'appuntamento in presenza. Numero tre: corso accelerato su SPID, C I E, P I N e altri acronimi motivazionali. Prema asterisco per tornare indietro.",
                     ['voice' => 'Polly.Carla', 'language' => 'it-IT']
                 );
-                $response->redirect(route('main-menu', [], false));
+                $response->redirect(route('main-menu'));
                 break;
             case '4':
                 $response->say(
                     "Per delegare un nipote serve modulo D-12 firmato dal nipote e contromarcato dal coniuge, se ancora in vita. Il modulo è disponibile solo online in orario di chiusura. Prema asterisco per tornare indietro.",
                     ['voice' => 'Polly.Carla', 'language' => 'it-IT']
                 );
-                $response->redirect(route('main-menu', [], false));
+                $response->redirect(route('main-menu'));
                 break;
             default:
                 $response->say(
                     "Scelta non valida.",
                     ['voice' => 'Polly.Carla', 'language' => 'it-IT']
                 );
-                $response->redirect(route('welcome', [], false));
+                $response->redirect(route('welcome'));
         }
 
-        return $response;
+        return response((string) $response, 200)->header('Content-Type', 'text/xml');
     }
-
     public function mainMenu()
     {
         $response = new Twiml();
+
+        // niente numDigits per accettare sia 1 cifra che 2 cifre come 33, 42, 77
+        // finishOnKey su '#' per chiudere l'input variabile, quindi mappiamo SPID su 9
         $gather = $response->gather([
-            'numDigits' => 2,
-            'action' => route('main-response', [], false),
+            'input' => 'dtmf',
+            'action' => route('main-response'),
             'method' => 'POST',
-            'timeout' => 5,
-            'finishOnKey' => '',
+            'timeout' => 20,
+            'finishOnKey' => '#',
         ]);
+
         $gather->say(
-            "Menu principale. Per parlare con un operatore umano prema 1. Per stato pratica con numero di protocollo a ventidue cifre prema 2. Per appuntamenti prema 3. Per il bonus apparecchi acustici duemila ventiquattro prema 4. Per ufficio legale prema 5. Per pensioni prema 6. Per reclami prema 7. Per ascoltare l'informativa privacy prema 0. Per SPID prema cancelletto. Per tornare a questo menu prema asterisco. Per ricominciare da capo prema sette sette.",
+            'Menu principale. Per parlare con un operatore umano prema 1. ' .
+            'Per stato pratica con numero di protocollo a ventidue cifre prema 2. ' .
+            'Per appuntamenti prema 3. ' .
+            'Per il bonus apparecchi acustici duemila ventiquattro prema 4. ' .
+            'Per ufficio legale prema 5. ' .
+            'Per pensioni prema 6. ' .
+            'Per reclami prema 7. ' .
+            'Per ascoltare l\'informativa privacy prema 0. ' .
+            'Per SPID prema 9. ' .
+            'Per tornare a questo menu prema asterisco. ' .
+            'Per ricominciare da capo prema sette sette. ' .
+            'Premere cancelletto per inviare.',
             ['voice' => 'Polly.Carla', 'language' => 'it-IT']
         );
 
-        return $response;
+        // se non arriva input, ripeti il menu
+        $response->redirect(route('main-menu'));
+
+        return response((string) $response, 200)->header('Content-Type', 'text/xml');
     }
 
     public function mainResponse(Request $request)
@@ -104,99 +137,94 @@ class IvrController extends Controller
         switch ($digits) {
             case '1':
                 $response->say(
-                    "La stiamo collegando con un operatore. Il Suo posto in coda è al numero 36. Rimanga in linea per non perdere la priorità acquisita. La preghiamo di attendere.",
+                    'La stiamo collegando con un operatore. Il Suo posto in coda è al numero 36. Rimanga in linea per non perdere la priorità acquisita. La preghiamo di attendere.',
+                    ['voice' => 'Polly.Carla', 'language' => 'it-IT']
+                );
+                $response->play('https://app.lorenzostella.it/zucchero.mp3');
+                $response->say(
+                    'Il Suo posto in coda è al numero 61. Per non perdere la priorità acquisita, sarà necessario segnalare la propria presenza cantando la canzone di attesa appena trasmessa. La preghiamo di cominciare a cantare a momenti. ',
+                    ['voice' => 'Polly.Carla', 'language' => 'it-IT']
+                );
+                $response->play('https://app.lorenzostella.it/zucchero.mp3');
+                $response->say(
+                    'Lorenzo, Nicole, Marta, Giovanni, Anna, Giulio, e i nipotini ti augurano un felice pensionamento! Buona giornata!',
                     ['voice' => 'Polly.Carla', 'language' => 'it-IT']
                 );
                 break;
             case '2':
                 $response->say(
-                    "Inserisca il numero di protocollo a ventidue cifre seguito da cancelletto. In alternativa prema asterisco per tornare al menu.",
+                    'Inserisca il numero di protocollo a ventidue cifre seguito da cancelletto. In alternativa prema asterisco per tornare al menu.',
                     ['voice' => 'Polly.Carla', 'language' => 'it-IT']
                 );
                 break;
             case '3':
                 $response->say(
-                    "Per prenotare un appuntamento compili prima il modulo di prenotazione dell'appuntamento per prenotare il modulo di prenotazione. Per ricevere il modulo è necessario inviare una richiesta firmata digitalmente con firma autografa.",
+                    'Per prenotare un appuntamento compili prima il modulo di prenotazione dell\'appuntamento per prenotare il modulo di prenotazione. Per ricevere il modulo è necessario inviare una richiesta firmata digitalmente con firma autografa.',
                     ['voice' => 'Polly.Carla', 'language' => 'it-IT']
                 );
                 break;
             case '4':
                 $response->say(
-                    "Per il bonus servono: codice C U P alfanumerico di quindici caratteri seguito da due vocali, certificato di rumorosità domestica e autocertificazione di non avere ausili all'udito amministrativi. In alternativa può presentare una marca da bollo digitale stampata per ricevere lo sconto sul bonus.",
+                    'Per il bonus servono: codice C U P alfanumerico di quindici caratteri seguito da due vocali, certificato di rumorosità domestica e autocertificazione di non avere ausili all\'udito amministrativi. In alternativa può presentare una marca da bollo digitale stampata per ricevere lo sconto sul bonus.',
                     ['voice' => 'Polly.Carla', 'language' => 'it-IT']
                 );
                 break;
             case '5':
                 $response->say(
-                    "Ufficio legale. Per pareri vincolanti non vincolanti lasci un messaggio dopo il segnale. Verrà richiamato entro ottanta giorni lavorativi.",
+                    'Ufficio legale. Per pareri vincolanti non vincolanti lasci un messaggio dopo il segnale. Verrà richiamato entro ottanta giorni lavorativi.',
                     ['voice' => 'Polly.Carla', 'language' => 'it-IT']
                 );
                 break;
             case '6':
                 $response->say(
-                    "Ricalcolo pensioni. Inserisca età anagrafica in anni scolastici e i minuti di intervallo maturati dal duemila ventitré a oggi. Eventuali minuti eccedenti verranno recuperati a fine carriera ai sensi della circolare Interv-23.",
+                    'Ricalcolo pensioni. Inserisca età anagrafica in anni scolastici e i minuti di intervallo maturati dal duemila ventitré a oggi. Eventuali minuti eccedenti verranno recuperati a fine carriera ai sensi della circolare Interv-23.',
                     ['voice' => 'Polly.Carla', 'language' => 'it-IT']
                 );
                 break;
             case '7':
                 $response->say(
-                    "Reclami. Il Suo reclamo verrà protocollato, ascoltato, contemplato e forse compreso. Lasci un messaggio dopo il segnale.",
+                    'Reclami. Il Suo reclamo verrà protocollato, ascoltato, contemplato e forse compreso. Lasci un messaggio dopo il segnale.',
                     ['voice' => 'Polly.Carla', 'language' => 'it-IT']
                 );
                 break;
             case '8':
                 $response->say(
-                    "Per certificare di aver perso la certificazione di smarrimento, presenti la copia conforme dell'originale mancante. Per assistenza prema asterisco.",
+                    'Per certificare di aver perso la certificazione di smarrimento, presenti la copia conforme dell\'originale mancante. Per assistenza prema asterisco.',
                     ['voice' => 'Polly.Carla', 'language' => 'it-IT']
                 );
                 break;
             case '0':
                 $response->say(
-                    "Informativa privacy. Articolo uno: principi generali. Noi trattiamo i dati con cura, diligenza e spirito di servizio. La lettura integrale dura diciannove minuti (oggi gliela risparmiamo).",
+                    'Informativa privacy. Articolo uno: principi generali. Noi trattiamo i dati con cura, diligenza e spirito di servizio. La lettura integrale dura diciannove minuti (oggi gliela risparmiamo).',
                     ['voice' => 'Polly.Carla', 'language' => 'it-IT']
                 );
                 break;
-            case '#':
+            case '9': // invece di '#'
                 $response->say(
-                    "Autenticazione SPID cantata. Intoni il Suo codice fiscale in do maggiore dopo il segnale. Per modulare in fa diesis prema 2 durante la registrazione. Prema asterisco per tornare indietro.",
+                    'Autenticazione SPID cantata. Intoni il Suo codice fiscale in do maggiore dopo il segnale. Per modulare in fa diesis prema 2 durante la registrazione. Prema asterisco per tornare indietro.',
                     ['voice' => 'Polly.Carla', 'language' => 'it-IT']
                 );
                 break;
             case '*':
-                $response->say(
-                    "Torna al menu principale.",
-                    ['voice' => 'Polly.Carla', 'language' => 'it-IT']
-                );
-                $response->redirect(route('main-menu', [], false));
-                return $response;
+                $response->say('Torna al menu principale.', ['voice' => 'Polly.Carla', 'language' => 'it-IT']);
+                $response->redirect(route('main-menu'));
+                return response((string) $response, 200)->header('Content-Type', 'text/xml');
             case '77':
-                $response->say(
-                    "Ricomincia. Riproduzione del messaggio di benvenuto in corso.",
-                    ['voice' => 'Polly.Carla', 'language' => 'it-IT']
-                );
-                $response->redirect(route('welcome', [], false));
-                return $response;
+                $response->say('Ricomincia. Riproduzione del messaggio di benvenuto in corso.', ['voice' => 'Polly.Carla', 'language' => 'it-IT']);
+                $response->redirect(route('welcome'));
+                return response((string) $response, 200)->header('Content-Type', 'text/xml');
             case '42':
-                $response->say(
-                    "Il senso della vita è quarantadue. Per approfondimenti si rivolga al docente di matematica con delega filosofica.",
-                    ['voice' => 'Polly.Carla', 'language' => 'it-IT']
-                );
+                $response->say('Il senso della vita è quarantadue. Per approfondimenti si rivolga al docente di matematica con delega filosofica.', ['voice' => 'Polly.Carla', 'language' => 'it-IT']);
                 break;
             case '33':
-                $response->say(
-                    "Assessorato al tempo perso. In questo momento stiamo valutando il valore didattico dell'attesa. Rimanga in linea per migliorare il punteggio di educazione civica. Prema asterisco per tornare al menu.",
-                    ['voice' => 'Polly.Carla', 'language' => 'it-IT']
-                );
+                $response->say('Assessorato al tempo perso. In questo momento stiamo valutando il valore didattico dell\'attesa. Rimanga in linea per migliorare il punteggio di educazione civica. Prema asterisco per tornare al menu.', ['voice' => 'Polly.Carla', 'language' => 'it-IT']);
                 break;
             default:
-                $response->say(
-                    "Scelta non valida.",
-                    ['voice' => 'Polly.Carla', 'language' => 'it-IT']
-                );
-                $response->redirect(route('main-menu', [], false));
-                return $response;
+                $response->say('Scelta non valida.', ['voice' => 'Polly.Carla', 'language' => 'it-IT']);
+                $response->redirect(route('main-menu'));
+                return response((string) $response, 200)->header('Content-Type', 'text/xml');
         }
 
-        return $response;
+        return response((string) $response, 200)->header('Content-Type', 'text/xml');
     }
 }
