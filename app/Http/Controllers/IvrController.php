@@ -18,7 +18,7 @@ class IvrController extends Controller
             ['voice' => 'Polly.Carla', 'language' => 'it-IT']
         );
 
-        $response->pause(['length' => 10]);
+        $response->pause(['length' => 12]);
 
         $response->say(
             "Benvenuta PAOLA POLATO. " .
