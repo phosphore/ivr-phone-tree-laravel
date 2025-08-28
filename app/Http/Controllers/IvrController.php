@@ -12,6 +12,7 @@ class IvrController extends Controller
     public function welcome(Request $request)
     {
         $callSid = $request->input('CallSid');
+
         if (
             $callSid &&
             env('TWILIO_ACCOUNT_SID') &&
@@ -51,14 +52,19 @@ class IvrController extends Controller
             ['voice' => 'Polly.Carla', 'language' => 'it-IT']
         );
 
-           // GATHER PER LA SCELTA 1-4
         $gather = $response->gather([
             'input' => 'dtmf',
             'numDigits' => 1,
-            'action' => route('age-response'), // URL assoluta
+            'action' => route('age-response'),
             'method' => 'POST',
             'timeout' => 10,
         ]);
+
+        $response->pause(['length' => 10]);
+        $response->redirect(route('welcome'));
+
+        return response((string) $response, 200)->header('Content-Type', 'text/xml');
+    }
 
 
         $response->pause(['length' => 10]);
