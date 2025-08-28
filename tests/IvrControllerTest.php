@@ -15,7 +15,7 @@ class IvrControllerTest extends TestCase
     public function test_age_option_one_leads_to_main_menu()
     {
         $response = $this->post(route('age-response'), ['Digits' => '1']);
-        $response->assertSee('Ottima scelta');
+        $response->assertSee('scelta é a proprio rischio');
     }
 
     public function test_main_menu_is_accessible()
@@ -30,4 +30,11 @@ class IvrControllerTest extends TestCase
         $response->assertSee('Torna al menu principale');
         $response->assertSee('/ivr/main-menu');
     }
+
+    public function test_recording_callback_returns_no_content()
+    {
+        $response = $this->post(route('recording-cb'), ['RecordingSid' => 'test']);
+        $response->assertNoContent();
+    }
 }
+
