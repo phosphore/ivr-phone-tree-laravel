@@ -3,12 +3,24 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Twilio\Rest\Client;
 use Twilio\TwiML\VoiceResponse as Twiml;
 
 class IvrController extends Controller
 {
-    public function welcome()
+    public function welcome(Request $request)
     {
+        $callSid = $request->input('CallSid');
+        if ($callSid) {
+            $twilio = new Client(env('TWILIO_ACCOUNT_SID'), env('TWILIO_AUTH_TOKEN'));
+            $twilio->calls($callSid)->recordings->create([
+                'recordingChannels' => 'dual',
+                'recordingTrack' => 'both',
+                'recordingStatusCallback' => route('recording-cb', [], false),
+                'recordingStatusCallbackEvent' => ['in-progress', 'completed'],
+            ]);
+        }
+
         $response = new Twiml();
 
         $response->say(
@@ -226,5 +238,11 @@ class IvrController extends Controller
         }
 
         return response((string) $response, 200)->header('Content-Type', 'text/xml');
+    }
+
+    public function recordingCallback(Request $request)
+    {
+        \Log::info('twilio recording', $request->all());
+        return response('', 204);
     }
 }
