@@ -11,27 +11,42 @@ class IvrController extends Controller
 {
     public function welcome(Request $request)
     {
-        $callSid = $request->input('CallSid');
+        Log::info('twilio.webhook', [
+            'method' => $request->method(),
+            'url' => $request->fullUrl(),
+            'user_agent' => $request->header('User-Agent'),
+            'params' => $request->all(),
+        ]);
 
-        if (
-            $callSid &&
-            env('TWILIO_ACCOUNT_SID') &&
-            env('TWILIO_AUTH_TOKEN')
-        ) {
+        $callSid = $request->input('CallSid');
+        $sid = env('TWILIO_ACCOUNT_SID');
+        $token = env('TWILIO_AUTH_TOKEN');
+
+        if (!$callSid) {
+            Log::warning('twilio.webhook missing CallSid');
+        }
+        if (!$sid || !$token) {
+            Log::warning('twilio env missing', ['sid_set' => (bool) $sid, 'token_set' => (bool) $token]);
+        }
+
+        if ($callSid && $sid && $token) {
             try {
-                $twilio = new Client(env('TWILIO_ACCOUNT_SID'), env('TWILIO_AUTH_TOKEN'));
+                $twilio = new Client($sid, $token);
                 $twilio->calls($callSid)->recordings->create([
                     'recordingChannels' => 'dual',
                     'recordingTrack' => 'both',
-                    'recordingStatusCallback' => route('recording-cb', [], false),
+                    'recordingStatusCallback' => route('recording-cb'),
                     'recordingStatusCallbackEvent' => ['in-progress', 'completed'],
                 ]);
+                Log::info('twilio recording started', ['CallSid' => $callSid]);
             } catch (\Throwable $e) {
                 Log::warning('Unable to start call recording', ['error' => $e->getMessage()]);
             }
         }
 
         $response = new Twiml();
+
+
 
         $response->say(
             "Benvenuti al Ministero dell'Istruzione e del Merito, Ufficio Scolastico Regionale per il Veneto. " .
@@ -66,15 +81,6 @@ class IvrController extends Controller
         return response((string) $response, 200)->header('Content-Type', 'text/xml');
     }
 
-
-        $response->pause(['length' => 10]);
-
-
-        // se non arriva input, ripeti
-        $response->redirect(route('welcome'));
-
-        return response((string) $response, 200)->header('Content-Type', 'text/xml');
-    }
 
     public function ageResponse(Request $request)
     {
