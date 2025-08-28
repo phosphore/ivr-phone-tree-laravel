@@ -3,31 +3,52 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Twilio\Rest\Client;
 use Twilio\TwiML\VoiceResponse as Twiml;
+use Monolog\Logger;
+use Monolog\Handler\StreamHandler;
+use Monolog\Level;
 
 class IvrController extends Controller
 {
+    private Logger $fileLog;
+
+    public function __construct()
+    {
+        // log file nella stessa directory del controller
+        $path = __DIR__.'/twilio-ivr.log';
+        $this->fileLog = new Logger('twilio-ivr');
+        $this->fileLog->pushHandler(new StreamHandler($path, Level::Debug));
+        $this->fileLog->info('logger ready', ['path' => $path]);
+    }
+
+    // 1) Rispondi subito e passa alla fase 'intro' (così la call diventa in-progress)
     public function welcome(Request $request)
     {
-        Log::info('twilio.webhook', [
+        $this->fileLog->info('twilio.webhook', [
             'method' => $request->method(),
             'url' => $request->fullUrl(),
             'user_agent' => $request->header('User-Agent'),
             'params' => $request->all(),
         ]);
 
+        $r = new Twiml();
+        $r->say(
+            'Questa chiamata potrebbe essere registrata per finalità di servizio.',
+            ['voice' => 'Polly.Carla', 'language' => 'it-IT']
+        );
+        $r->pause(['length' => 1]);
+        $r->redirect(route('ivr-intro'), ['method' => 'POST']); // hop tecnico
+
+        return response((string) $r, 200)->header('Content-Type', 'text/xml');
+    }
+
+    // 2) Ora la call è in-progress: avvia la registrazione e prosegui con l’IVR
+    public function intro(Request $request)
+    {
         $callSid = $request->input('CallSid');
         $sid = env('TWILIO_ACCOUNT_SID');
         $token = env('TWILIO_AUTH_TOKEN');
-
-        if (!$callSid) {
-            Log::warning('twilio.webhook missing CallSid');
-        }
-        if (!$sid || !$token) {
-            Log::warning('twilio env missing', ['sid_set' => (bool) $sid, 'token_set' => (bool) $token]);
-        }
 
         if ($callSid && $sid && $token) {
             try {
@@ -36,38 +57,38 @@ class IvrController extends Controller
                     'recordingChannels' => 'dual',
                     'recordingTrack' => 'both',
                     'recordingStatusCallback' => route('recording-cb'),
-                    'recordingStatusCallbackEvent' => ['in-progress', 'completed'],
+                    'recordingStatusCallbackEvent' => ['in-progress', 'completed', 'absent'],
                 ]);
-                Log::info('twilio recording started', ['CallSid' => $callSid]);
+                $this->fileLog->info('recording started', ['CallSid' => $callSid]);
             } catch (\Throwable $e) {
-                Log::warning('Unable to start call recording', ['error' => $e->getMessage()]);
+                $this->fileLog->error('recording start failed', ['CallSid' => $callSid, 'error' => $e->getMessage()]);
             }
+        } else {
+            $this->fileLog->warning('missing env or CallSid', ['CallSid' => $callSid, 'sid' => (bool) $sid, 'token' => (bool) $token]);
         }
 
         $response = new Twiml();
 
-
-
         $response->say(
-            "Benvenuti al Ministero dell'Istruzione e del Merito, Ufficio Scolastico Regionale per il Veneto. " .
-            "Rimanga in linea per l'identificazione automatica tramite codice fiscale... " .
-            "Pronunci di seguito il Suo codice fiscale.",
+            'Benvenuti al Ministero dell\'Istruzione e del Merito, Ufficio Scolastico Regionale per il Veneto. ' .
+            'Rimanga in linea per l\'identificazione automatica tramite codice fiscale... ' .
+            'Pronunci di seguito il Suo codice fiscale.',
             ['voice' => 'Polly.Carla', 'language' => 'it-IT']
         );
 
         $response->pause(['length' => 10]);
 
         $response->say(
-            "Benvenuta PAOLA POLATO. " .
-            "Abbiamo rilevato che il chiamante potrebbe avere più di sessanta anni in base alla banca dati corrente. " .
-            "Vuole proseguire col percorso digitale? Prema 1. " .
-            "Per assistenza presso l'ufficio più vicino prema 2. " .
-            "Per ascoltare un orientamento per over sessanta prema 3. " .
-            "Per delegare un conoscente più giovane prema 4.",
+            'Benvenuta PAOLA POLATO. ' .
+            'Abbiamo rilevato che il chiamante potrebbe avere più di sessanta anni in base alla banca dati corrente. ' .
+            'Vuole proseguire col percorso digitale? Prema 1. ' .
+            'Per assistenza presso l\'ufficio più vicino prema 2. ' .
+            'Per ascoltare un orientamento per over sessanta prema 3. ' .
+            'Per delegare un conoscente più giovane prema 4.',
             ['voice' => 'Polly.Carla', 'language' => 'it-IT']
         );
 
-        $gather = $response->gather([
+        $response->gather([
             'input' => 'dtmf',
             'numDigits' => 1,
             'action' => route('age-response'),
@@ -76,56 +97,56 @@ class IvrController extends Controller
         ]);
 
         $response->pause(['length' => 10]);
-        $response->redirect(route('welcome'));
+        $response->redirect(route('ivr-intro')); // ripeti il blocco se niente input
 
         return response((string) $response, 200)->header('Content-Type', 'text/xml');
     }
 
-
     public function ageResponse(Request $request)
     {
         $digit = $request->input('Digits');
+        $this->fileLog->info('ageResponse', ['Digits' => $digit, 'params' => $request->all()]);
+
         $response = new Twiml();
 
         switch ($digit) {
             case '1':
                 $response->say(
-                    "Si ricorda che la scelta é a proprio rischio. Se per caso è davvero rincoglionita dalla vecchiaia e ha selezionato l'opzione errata, può semplicemente riagganciare e ricominciare il percorso.",
+                    'Si ricorda che la scelta è a proprio rischio. Se per caso è davvero rincoglionita dalla vecchiaia e ha selezionato l\'opzione errata, può semplicemente riagganciare e ricominciare il percorso.',
                     ['voice' => 'Polly.Carla', 'language' => 'it-IT']
                 );
                 $response->redirect(route('main-menu'));
                 break;
             case '2':
                 $response->say(
-                    "Per trovare l'ufficio più vicino sarà necessario il CAP del suo comune a cinque cifre. Se non lo ricorda prema 0 per ascoltare tutti i CAP del Veneto in ordine alfabetico. La prima disponibilità utile risulta: 8 febbraio duemila ventisei. Si prega di parlare con un operatore umano nel prossimo menù.",
+                    'Per trovare l\'ufficio più vicino sarà necessario il CAP del suo comune a cinque cifre. Se non lo ricorda prema 0 per ascoltare tutti i CAP del Veneto in ordine alfabetico. La prima disponibilità utile risulta: 8 febbraio duemila ventisei. Si prega di parlare con un operatore umano nel prossimo menù.',
                     ['voice' => 'Polly.Carla', 'language' => 'it-IT']
                 );
                 $response->redirect(route('main-menu'));
                 break;
             case '3':
                 $response->say(
-                    "Servizi digitali per over sessanta. Numero uno: stampa del modulo digitale in formato cartaceo davanti a uno sportello. Numero due: appuntamento online per prenotare l'appuntamento in presenza. Numero tre: corso accelerato su SPID, C I E, P I N e altri acronimi motivazionali. Prema asterisco per tornare indietro.",
+                    'Servizi digitali per over sessanta. Numero uno: stampa del modulo digitale in formato cartaceo davanti a uno sportello. Numero due: appuntamento online per prenotare l\'appuntamento in presenza. Numero tre: corso accelerato su SPID, C I E, P I N e altri acronimi motivazionali. Prema asterisco per tornare indietro.',
                     ['voice' => 'Polly.Carla', 'language' => 'it-IT']
                 );
                 $response->redirect(route('main-menu'));
                 break;
             case '4':
                 $response->say(
-                    "Per delegare un nipote serve modulo D-12 firmato dal nipote e contromarcato dal coniuge, se ancora in vita. Il modulo è disponibile solo online in orario di chiusura. Prema asterisco per tornare indietro.",
+                    'Per delegare un nipote serve modulo D-12 firmato dal nipote e contromarcato dal coniuge, se ancora in vita. Il modulo è disponibile solo online in orario di chiusura. Prema asterisco per tornare indietro.',
                     ['voice' => 'Polly.Carla', 'language' => 'it-IT']
                 );
                 $response->redirect(route('main-menu'));
                 break;
             default:
-                $response->say(
-                    "Scelta non valida.",
-                    ['voice' => 'Polly.Carla', 'language' => 'it-IT']
-                );
-                $response->redirect(route('welcome'));
+                $response->say('Scelta non valida.', ['voice' => 'Polly.Carla', 'language' => 'it-IT']);
+                $response->redirect(route('ivr-intro'));
         }
 
         return response((string) $response, 200)->header('Content-Type', 'text/xml');
     }
+
+    // mantieni questi due METODI IDENTICI al tuo testo
     public function mainMenu()
     {
         $response = new Twiml();
@@ -263,7 +284,30 @@ class IvrController extends Controller
 
     public function recordingCallback(Request $request)
     {
-        \Log::info('twilio recording', $request->all());
+        $payload = $request->all();
+        $this->fileLog->info('recording.cb', $payload);
+
+        // scarica e salva l’mp3 in /tmp quando completed
+        try {
+            if (($payload['RecordingStatus'] ?? null) === 'completed' && isset($payload['RecordingUrl'])) {
+                $sid = env('TWILIO_ACCOUNT_SID');
+                $token = env('TWILIO_AUTH_TOKEN');
+                $url = $payload['RecordingUrl'].'.mp3';
+                if (class_exists(\Illuminate\Support\Facades\Http::class)) {
+                    $resp = \Illuminate\Support\Facades\Http::withBasicAuth($sid, $token)->get($url);
+                    if ($resp->successful()) {
+                        $fname = __DIR__.'/twilio-'.$payload['RecordingSid'].'.mp3';
+                        file_put_contents($fname, $resp->body());
+                        $this->fileLog->info('recording saved', ['file' => $fname]);
+                    } else {
+                        $this->fileLog->warning('recording download failed', ['status' => $resp->status()]);
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            $this->fileLog->error('recording save error', ['error' => $e->getMessage()]);
+        }
+
         return response('', 204);
     }
 }
