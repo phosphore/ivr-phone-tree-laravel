@@ -8,7 +8,7 @@ class IvrControllerTest extends TestCase
 
     public function test_welcome_contains_age_options()
     {
-        $response = $this->post(route('welcome'));
+        $response = $this->post(route('welcome'), ['CallSid' => 'CA123']);
         $response->assertSee('Vuole proseguire col percorso digitale');
     }
 

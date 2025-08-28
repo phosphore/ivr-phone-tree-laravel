@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Twilio\Rest\Client;
 use Twilio\TwiML\VoiceResponse as Twiml;
 
@@ -11,14 +12,23 @@ class IvrController extends Controller
     public function welcome(Request $request)
     {
         $callSid = $request->input('CallSid');
-        if ($callSid) {
-            $twilio = new Client(env('TWILIO_ACCOUNT_SID'), env('TWILIO_AUTH_TOKEN'));
-            $twilio->calls($callSid)->recordings->create([
-                'recordingChannels' => 'dual',
-                'recordingTrack' => 'both',
-                'recordingStatusCallback' => route('recording-cb', [], false),
-                'recordingStatusCallbackEvent' => ['in-progress', 'completed'],
-            ]);
+
+        if (
+            $callSid &&
+            env('TWILIO_ACCOUNT_SID') &&
+            env('TWILIO_AUTH_TOKEN')
+        ) {
+            try {
+                $twilio = new Client(env('TWILIO_ACCOUNT_SID'), env('TWILIO_AUTH_TOKEN'));
+                $twilio->calls($callSid)->recordings->create([
+                    'recordingChannels' => 'dual',
+                    'recordingTrack' => 'both',
+                    'recordingStatusCallback' => route('recording-cb', [], false),
+                    'recordingStatusCallbackEvent' => ['in-progress', 'completed'],
+                ]);
+            } catch (\Throwable $e) {
+                Log::warning('Unable to start call recording', ['error' => $e->getMessage()]);
+            }
         }
 
         $response = new Twiml();
@@ -42,14 +52,19 @@ class IvrController extends Controller
             ['voice' => 'Polly.Carla', 'language' => 'it-IT']
         );
 
-           // GATHER PER LA SCELTA 1-4
         $gather = $response->gather([
             'input' => 'dtmf',
             'numDigits' => 1,
-            'action' => route('age-response'), // URL assoluta
+            'action' => route('age-response'),
             'method' => 'POST',
             'timeout' => 10,
         ]);
+
+        $response->pause(['length' => 10]);
+        $response->redirect(route('welcome'));
+
+        return response((string) $response, 200)->header('Content-Type', 'text/xml');
+    }
 
 
         $response->pause(['length' => 10]);
